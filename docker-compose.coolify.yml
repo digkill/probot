@@ -79,7 +79,7 @@ services:
     image: minio/mc:latest
     depends_on:
       - minio
-    restart: on-failure
+    restart: unless-stopped
     environment:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
@@ -94,14 +94,26 @@ services:
           sleep 2
         done
         mc mb --ignore-existing "local/$$S3_BUCKET"
+        touch /tmp/ready
+        exec tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   migrate:
     <<: *go
-    entrypoint: ["/bin/sh", "-c", "goose -dir /migrations postgres \"$$DATABASE_URL\" up"]
+    entrypoint: ["/bin/sh", "-c", "goose -dir /migrations postgres \"$$DATABASE_URL\" up && touch /tmp/ready && exec tail -f /dev/null"]
     depends_on:
       postgres:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   api:
     <<: *go
@@ -110,11 +122,11 @@ services:
       - "8080"
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio-init:
-        condition: service_completed_successfully
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 10s
@@ -128,7 +140,7 @@ services:
     entrypoint: ["/app/worker"]
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -138,7 +150,7 @@ services:
     entrypoint: ["/app/crawler"]
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
