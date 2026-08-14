@@ -2,10 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/digkill/probot/internal/auth"
+	"github.com/digkill/probot/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,6 +24,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.WorkspaceSlug = strings.ToLower(strings.TrimSpace(req.WorkspaceSlug))
 	if req.Email == "" || req.Password == "" || req.WorkspaceSlug == "" {
 		writeErr(w, http.StatusBadRequest, "email, password, workspace_slug required")
 		return
@@ -33,6 +38,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	ws, user, err := s.store.CreateWorkspaceWithOwner(r.Context(), req.WorkspaceName, req.WorkspaceSlug, req.Email, req.Password, req.Name)
 	if err != nil {
+		if errors.Is(err, store.ErrEmailTaken) || errors.Is(err, store.ErrWorkspaceSlugTaken) {
+			writeErr(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -57,6 +66,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	user, err := s.store.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "invalid credentials")

@@ -5,10 +5,10 @@ import { api, setToken, setWorkspaceId } from '../api'
 
 export default function LoginPage() {
   const nav = useNavigate()
-  const [mode, setMode] = useState<'login' | 'register'>('register')
-  const [email, setEmail] = useState('owner@probot.local')
-  const [password, setPassword] = useState('probot123')
-  const [workspaceSlug, setWorkspaceSlug] = useState('acme')
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [workspaceSlug, setWorkspaceSlug] = useState('mediarise')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
