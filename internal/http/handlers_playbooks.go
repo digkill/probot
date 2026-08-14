@@ -47,7 +47,7 @@ func (s *Server) handleApplyPlaybook(w http.ResponseWriter, r *http.Request) {
 		BaseTime:   time.Now(),
 	})
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, res)
@@ -56,7 +56,7 @@ func (s *Server) handleApplyPlaybook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListShortLinks(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListShortLinks(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	type item struct {
@@ -94,7 +94,7 @@ func (s *Server) handleCreateShortLink(w http.ResponseWriter, r *http.Request) {
 		Code:        req.Code,
 	}
 	if err := s.store.CreateShortLink(r.Context(), link); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{

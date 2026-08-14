@@ -2,13 +2,11 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/digkill/probot/internal/auth"
-	"github.com/digkill/probot/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,13 +19,13 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		WorkspaceSlug string `json:"workspace_slug"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid json")
+		writeErr(w, http.StatusBadRequest, "Could not read the request.")
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.WorkspaceSlug = strings.ToLower(strings.TrimSpace(req.WorkspaceSlug))
 	if req.Email == "" || req.Password == "" || req.WorkspaceSlug == "" {
-		writeErr(w, http.StatusBadRequest, "email, password, workspace_slug required")
+		writeErr(w, http.StatusBadRequest, "Email, password and workspace name are required.")
 		return
 	}
 	if req.WorkspaceName == "" {
@@ -38,16 +36,12 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	ws, user, err := s.store.CreateWorkspaceWithOwner(r.Context(), req.WorkspaceName, req.WorkspaceSlug, req.Email, req.Password, req.Name)
 	if err != nil {
-		if errors.Is(err, store.ErrEmailTaken) || errors.Is(err, store.ErrWorkspaceSlugTaken) {
-			writeErr(w, http.StatusConflict, err.Error())
-			return
-		}
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	token, err := auth.Issue(s.cfg.JWTSecret, user.ID, user.Email, 72*time.Hour)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -63,22 +57,22 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid json")
+		writeErr(w, http.StatusBadRequest, "Could not read the request.")
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	user, err := s.store.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
-		writeErr(w, http.StatusUnauthorized, "invalid credentials")
+		writeErr(w, http.StatusUnauthorized, "Wrong email or password.")
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		writeErr(w, http.StatusUnauthorized, "invalid credentials")
+		writeErr(w, http.StatusUnauthorized, "Wrong email or password.")
 		return
 	}
 	token, err := auth.Issue(s.cfg.JWTSecret, user.ID, user.Email, 72*time.Hour)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	workspaces, _ := s.store.ListWorkspacesForUser(r.Context(), user.ID)
@@ -92,7 +86,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListWorkspacesForUser(r.Context(), mustUserID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)

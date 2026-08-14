@@ -21,7 +21,7 @@ import (
 func (s *Server) handleListBrands(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListBrands(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -39,7 +39,7 @@ func (s *Server) handleCreateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.CreateBrand(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	_, _, _, _ = s.seedReviewWatch(r.Context(), req, false)
@@ -49,7 +49,7 @@ func (s *Server) handleCreateBrand(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListCampaigns(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListCampaigns(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -66,7 +66,7 @@ func (s *Server) handleCreateCampaign(w http.ResponseWriter, r *http.Request) {
 		req.Status = "draft"
 	}
 	if err := s.store.CreateCampaign(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)
@@ -80,7 +80,7 @@ func (s *Server) handleCampaignGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	g, err := s.graph.CampaignGraph(r.Context(), id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, g)
@@ -89,7 +89,7 @@ func (s *Server) handleCampaignGraph(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListContent(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListContent(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -106,7 +106,7 @@ func (s *Server) handleCreateContent(w http.ResponseWriter, r *http.Request) {
 		req.Status = "draft"
 	}
 	if err := s.store.CreateContent(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)
@@ -115,7 +115,7 @@ func (s *Server) handleCreateContent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListChannels(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -165,7 +165,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 				Meta:        req.Meta,
 			})
 			if err != nil {
-				writeErr(w, http.StatusBadRequest, err.Error())
+				writeCause(w, http.StatusBadRequest, err)
 				return
 			}
 			creds = connected
@@ -177,11 +177,11 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 
 	blob, err := auth.EncryptJSON([]byte(s.cfg.EncryptionKey), creds)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	if err := s.store.CreateChannel(r.Context(), ch, blob); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, ch)
@@ -190,7 +190,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListPublications(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListPublications(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -222,12 +222,12 @@ func (s *Server) handleCreatePublication(w http.ResponseWriter, r *http.Request)
 		IdempotencyKey: uuid.NewString(),
 	}
 	if err := s.store.CreatePublication(r.Context(), pub); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.Enqueue {
 		if err := s.enqueuePublish(pub.ID); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			writeCause(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
@@ -241,7 +241,7 @@ func (s *Server) handleEnqueuePublication(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := s.enqueuePublish(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "enqueued"})
@@ -261,7 +261,7 @@ func (s *Server) handleConfirmPublication(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := s.store.ConfirmManualPublication(r.Context(), id, req.ExternalURL); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "live"})
@@ -279,7 +279,7 @@ func (s *Server) enqueuePublish(id uuid.UUID) error {
 func (s *Server) handleListPlatforms(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListPlatformDefinitions(r.Context())
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -288,7 +288,7 @@ func (s *Server) handleListPlatforms(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListCustomPlatforms(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListCustomPlatforms(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -305,7 +305,7 @@ func (s *Server) handleCreateCustomPlatform(w http.ResponseWriter, r *http.Reque
 		req.HTTPTemplate = json.RawMessage(`{}`)
 	}
 	if err := s.store.CreateCustomPlatform(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)
@@ -329,7 +329,7 @@ func (s *Server) handleListMentions(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := s.store.ListMentionsFiltered(r.Context(), mustWorkspaceID(r), f)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -354,7 +354,7 @@ func (s *Server) handleCreateMention(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256([]byte(req.URL + "|" + req.Title))
 	hash := hex.EncodeToString(sum[:])
 	if err := s.store.UpsertMention(r.Context(), &req, hash); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)

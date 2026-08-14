@@ -24,7 +24,7 @@ func (s *Server) engager() *service.Engager {
 func (s *Server) handleListEngagement(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListEngagementTasks(r.Context(), mustWorkspaceID(r), r.URL.Query().Get("status"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -81,12 +81,12 @@ func (s *Server) handleCreateEngagement(w http.ResponseWriter, r *http.Request) 
 		Points:           points,
 	}
 	if err := s.store.CreateEngagementTask(r.Context(), t); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	if status == domain.EngageApproved {
 		if err := s.enqueueEngage(t.ID); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			writeCause(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
@@ -109,11 +109,11 @@ func (s *Server) handleApproveEngagement(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := s.store.SetEngagementStatus(r.Context(), id, domain.EngageApproved, "", ""); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := s.enqueueEngage(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "enqueued"})
@@ -131,7 +131,7 @@ func (s *Server) handleSkipEngagement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.SetEngagementStatus(r.Context(), id, domain.EngageSkipped, "skipped", ""); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "skipped"})
@@ -145,7 +145,7 @@ func (s *Server) handleDraftEngagement(w http.ResponseWriter, r *http.Request) {
 	}
 	text, err := s.engager().DraftComment(r.Context(), mustWorkspaceID(r), id)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		writeCause(w, http.StatusBadGateway, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"draft_text": text})
@@ -172,7 +172,7 @@ func (s *Server) handleConfirmEngagementManual(w http.ResponseWriter, r *http.Re
 	}
 	_ = s.store.InsertKarmaEvent(r.Context(), task.WorkspaceID, task.ChannelID, task.ID, string(task.Kind), points)
 	if err := s.store.SetEngagementStatus(r.Context(), id, domain.EngageDone, "", req.ResultURL); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "done"})
@@ -181,7 +181,7 @@ func (s *Server) handleConfirmEngagementManual(w http.ResponseWriter, r *http.Re
 func (s *Server) handleKarmaSummary(w http.ResponseWriter, r *http.Request) {
 	sum, err := s.store.KarmaSummary(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sum)
@@ -190,7 +190,7 @@ func (s *Server) handleKarmaSummary(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListPartners(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListLinkPartners(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -208,7 +208,7 @@ func (s *Server) handleCreatePartner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.CreateLinkPartner(r.Context(), &p); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, p)
@@ -236,7 +236,7 @@ func (s *Server) handleUpdatePartner(w http.ResponseWriter, r *http.Request) {
 		p.Name = existing.Name
 	}
 	if err := s.store.UpdateLinkPartner(r.Context(), &p); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
@@ -254,8 +254,8 @@ func (s *Server) handleEngagementFromMention(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var req struct {
-		ChannelID uuid.UUID `json:"channel_id"`
-		Kind      string    `json:"kind"`
+		ChannelID uuid.UUID  `json:"channel_id"`
+		Kind      string     `json:"kind"`
 		BrandID   *uuid.UUID `json:"brand_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ChannelID == uuid.Nil {
@@ -283,7 +283,7 @@ func (s *Server) handleEngagementFromMention(w http.ResponseWriter, r *http.Requ
 		Points:      3,
 	}
 	if err := s.store.CreateEngagementTask(r.Context(), t); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, t)

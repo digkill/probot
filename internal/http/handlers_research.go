@@ -31,11 +31,11 @@ func (s *Server) handleBrandAIResearch(w http.ResponseWriter, r *http.Request) {
 		BrandID:     brand.ID,
 	})
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	if _, err := s.asynq.Enqueue(task); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{
@@ -53,7 +53,7 @@ func (s *Server) handleSeedResearchAgents(w http.ResponseWriter, r *http.Request
 		name := p.Name + " research"
 		exists, err := s.store.AgentNameExists(r.Context(), ws, name)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			writeCause(w, http.StatusInternalServerError, err)
 			return
 		}
 		if exists {
@@ -72,7 +72,7 @@ func (s *Server) handleSeedResearchAgents(w http.ResponseWriter, r *http.Request
 			Enabled:      true,
 		}
 		if err := s.store.CreateAgent(r.Context(), a); err != nil {
-			writeErr(w, http.StatusBadRequest, err.Error())
+			writeCause(w, http.StatusBadRequest, err)
 			return
 		}
 		created++

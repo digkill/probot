@@ -41,7 +41,9 @@ export default function LoginPage() {
       }
       nav('/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed')
+      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+      setError(msg)
+      if (msg.toLowerCase().includes('already registered')) setMode('login')
     } finally {
       setLoading(false)
     }

@@ -37,7 +37,7 @@ func (s *Server) handleUpdateBrand(w http.ResponseWriter, r *http.Request) {
 		req.Slug = existing.Slug
 	}
 	if err := s.store.UpdateBrand(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.Name != existing.Name || req.Slug != existing.Slug || req.CanonicalURL != existing.CanonicalURL {
@@ -50,7 +50,7 @@ func (s *Server) handleAnalyticsSummary(w http.ResponseWriter, r *http.Request) 
 	ws := mustWorkspaceID(r)
 	metrics, err := s.store.LatestMetricsByWorkspace(r.Context(), ws)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	clicks, _ := s.store.SumShortLinkClicks(r.Context(), ws)
@@ -73,10 +73,10 @@ func (s *Server) handleAnalyticsSummary(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"totals": map[string]any{
 			"reach": reach, "likes": likes, "comments": comments, "shares": shares,
-			"short_link_clicks": clicks,
-			"mentions":          len(mentions),
-			"negative_mentions": inbox.Negative,
-			"open_negative":     inbox.OpenNegative,
+			"short_link_clicks":  clicks,
+			"mentions":           len(mentions),
+			"negative_mentions":  inbox.Negative,
+			"open_negative":      inbox.OpenNegative,
 			"escalated_mentions": inbox.Escalated,
 		},
 		"mention_inbox":      inbox,
@@ -105,7 +105,7 @@ func (s *Server) handleAnalyticsAdvise(w http.ResponseWriter, r *http.Request) {
 
 	agents, err := s.store.ListAgents(r.Context(), ws)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	var agent *domain.AIAgent
@@ -159,7 +159,7 @@ func (s *Server) handleAnalyticsAdvise(w http.ResponseWriter, r *http.Request) {
 	out, err := s.ai.Run(r.Context(), *agent, input)
 	if err != nil {
 		_ = s.store.FinishAIRun(r.Context(), run.ID, "failed", json.RawMessage(`{}`), 0, 0, err.Error())
-		writeErr(w, http.StatusBadGateway, err.Error())
+		writeCause(w, http.StatusBadGateway, err)
 		return
 	}
 	outJSON, _ := json.Marshal(out)
@@ -197,7 +197,7 @@ func (s *Server) handleMentionDraftReply(w http.ResponseWriter, r *http.Request)
 
 	agent, err := s.pickAgent(r, req.AgentID, domain.AgentContent)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -252,7 +252,7 @@ func (s *Server) handleSetChannelHealth(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := s.store.SetChannelHealth(r.Context(), id, req.Health); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated", "health": req.Health})
@@ -260,7 +260,7 @@ func (s *Server) handleSetChannelHealth(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleTriggerStatsPoll(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.asynq.Enqueue(queue.NewPollAllStatsTask()); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "enqueued"})

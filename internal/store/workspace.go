@@ -13,13 +13,19 @@ import (
 )
 
 var (
-	ErrEmailTaken         = errors.New("email already registered, use Login")
-	ErrWorkspaceSlugTaken = errors.New("workspace slug already taken")
+	ErrEmailTaken         = errors.New("This email is already registered. Sign in instead.")
+	ErrWorkspaceSlugTaken = errors.New("This workspace slug is already taken.")
 )
 
 func isUniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505" && (constraint == "" || pgErr.ConstraintName == constraint)
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		return false
+	}
+	if constraint == "" {
+		return true
+	}
+	return pgErr.ConstraintName == constraint || strings.Contains(pgErr.ConstraintName, constraint) || strings.Contains(pgErr.Message, constraint)
 }
 
 func (s *Store) CreateWorkspaceWithOwner(ctx context.Context, wsName, wsSlug, email, password, userName string) (*domain.Workspace, *domain.User, error) {
@@ -41,7 +47,7 @@ func (s *Store) CreateWorkspaceWithOwner(ctx context.Context, wsName, wsSlug, em
 		RETURNING id, email, password_hash, name, created_at
 	`, email, string(hash), userName).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.CreatedAt)
 	if err != nil {
-		if isUniqueViolation(err, "users_email_key") {
+		if isUniqueViolation(err, "email") {
 			return nil, nil, ErrEmailTaken
 		}
 		return nil, nil, fmt.Errorf("create user: %w", err)
@@ -54,7 +60,7 @@ func (s *Store) CreateWorkspaceWithOwner(ctx context.Context, wsName, wsSlug, em
 		RETURNING id, name, slug, created_at, updated_at
 	`, wsName, wsSlug).Scan(&ws.ID, &ws.Name, &ws.Slug, &ws.CreatedAt, &ws.UpdatedAt)
 	if err != nil {
-		if isUniqueViolation(err, "workspaces_slug_key") {
+		if isUniqueViolation(err, "slug") {
 			return nil, nil, ErrWorkspaceSlugTaken
 		}
 		return nil, nil, fmt.Errorf("create workspace: %w", err)

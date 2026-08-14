@@ -170,20 +170,16 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeErr(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := r.Header.Get("Authorization")
 		if !strings.HasPrefix(h, "Bearer ") {
-			writeErr(w, http.StatusUnauthorized, "missing bearer token")
+			writeErr(w, http.StatusUnauthorized, "Please sign in.")
 			return
 		}
 		claims, err := auth.Parse(s.cfg.JWTSecret, strings.TrimPrefix(h, "Bearer "))
 		if err != nil {
-			writeErr(w, http.StatusUnauthorized, "invalid token")
+			writeErr(w, http.StatusUnauthorized, "Session expired. Please sign in again.")
 			return
 		}
 		ctx := contextWith(r.Context(), ctxUserID, claims.UserID)
@@ -200,7 +196,7 @@ func (s *Server) workspaceMiddleware(next http.Handler) http.Handler {
 		}
 		userID := mustUserID(r)
 		if _, err := s.store.UserRole(r.Context(), wsID, userID); err != nil {
-			writeErr(w, http.StatusForbidden, "not a workspace member")
+			writeErr(w, http.StatusForbidden, "You don't have access to this workspace.")
 			return
 		}
 		ctx := contextWith(r.Context(), ctxWorkspaceID, wsID)

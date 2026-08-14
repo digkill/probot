@@ -94,7 +94,7 @@ func (s *Server) handleSeedReviewWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	created, enqueued, sources, err := s.seedReviewWatch(r.Context(), *brand, true)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -117,7 +117,7 @@ func (s *Server) handleMentionInbox(w http.ResponseWriter, r *http.Request) {
 	}
 	inbox, err := s.store.MentionInbox(r.Context(), mustWorkspaceID(r), brandID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, inbox)
@@ -158,7 +158,7 @@ func (s *Server) handleMentionObjection(w http.ResponseWriter, r *http.Request) 
 	brand := s.mentionBrand(r, m, req.BrandID)
 	agent, err := s.pickAgent(r, req.AgentID, domain.AgentReputation)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (s *Server) handleMentionObjection(w http.ResponseWriter, r *http.Request) 
 				"snippet": m.Snippet, "author": m.Author,
 				"sentiment": m.Sentiment, "severity": m.Severity,
 			},
-			"goal": "handle_objection",
+			"goal":           "handle_objection",
 			"fallback_draft": text,
 		}
 		if brand != nil {
@@ -230,7 +230,7 @@ func (s *Server) handleMentionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.SetMentionStatus(r.Context(), m.ID, req.Status); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	m.Status = req.Status
@@ -239,7 +239,7 @@ func (s *Server) handleMentionStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTriggerCrawlDue(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.asynq.Enqueue(queue.NewCrawlDueTask()); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "enqueued"})

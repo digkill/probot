@@ -13,7 +13,7 @@ import (
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListAgents(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -46,7 +46,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Enabled = true
 	if err := s.store.CreateAgent(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)
@@ -78,7 +78,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		req.Params = existing.Params
 	}
 	if err := s.store.UpdateAgent(r.Context(), &req); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, req)
@@ -91,7 +91,7 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteAgent(r.Context(), id); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -141,13 +141,13 @@ func (s *Server) handleRunAgent(w http.ResponseWriter, r *http.Request) {
 		Status:      "running",
 	}
 	if err := s.store.CreateAIRun(r.Context(), run); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	out, err := s.ai.Run(r.Context(), *agent, input)
 	if err != nil {
 		_ = s.store.FinishAIRun(r.Context(), run.ID, "failed", json.RawMessage(`{}`), 0, 0, err.Error())
-		writeErr(w, http.StatusBadGateway, err.Error())
+		writeCause(w, http.StatusBadGateway, err)
 		return
 	}
 	outJSON, _ := json.Marshal(out)
@@ -162,7 +162,7 @@ func (s *Server) handleRunAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListCrawlSources(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListCrawlSources(r.Context(), mustWorkspaceID(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -201,7 +201,7 @@ func (s *Server) handleCreateCrawlSource(w http.ResponseWriter, r *http.Request)
 		Enabled:     true,
 	}
 	if err := s.store.InsertCrawlSource(r.Context(), src); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, src)
@@ -219,7 +219,7 @@ func (s *Server) handleRunCrawlSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.enqueueCrawlSource(src); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeCause(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "enqueued"})
