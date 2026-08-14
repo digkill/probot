@@ -1,0 +1,165 @@
+# Coolify production stack. Do not publish host ports 80/443/8080 —
+# Traefik already binds them. Domain https://prbo.ru is attached to `web`.
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-production}
+  HTTP_ADDR: :8080
+  DATABASE_URL: postgres://probot:${POSTGRES_PASSWORD}@postgres:5432/probot?sslmode=disable
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+  GROK_API_KEY: ${GROK_API_KEY:-}
+  XAI_API_KEY: ${XAI_API_KEY:-}
+  GROK_MODEL: ${GROK_MODEL:-grok-3}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  IMAGE_API_KEY: ${IMAGE_API_KEY:-}
+  IMAGE_BASE_URL: ${IMAGE_BASE_URL:-https://api.openai.com/v1}
+  IMAGE_MODEL: ${IMAGE_MODEL:-dall-e-3}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  VK_ACCESS_TOKEN: ${VK_ACCESS_TOKEN:-}
+  BLUESKY_HANDLE: ${BLUESKY_HANDLE:-}
+  BLUESKY_APP_PASSWORD: ${BLUESKY_APP_PASSWORD:-}
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_BUCKET: ${S3_BUCKET:-probot}
+  S3_USE_SSL: "false"
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://prbo.ru}
+
+x-go: &go
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+  environment:
+    <<: *app-env
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: probot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: probot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U probot -d probot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - miniodata:/data
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    restart: on-failure
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-probot}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        i=0
+        until mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY"; do
+          i=$$((i+1))
+          if [ $$i -gt 30 ]; then echo "minio not ready"; exit 1; fi
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+
+  migrate:
+    <<: *go
+    entrypoint: ["/bin/sh", "-c", "goose -dir /migrations postgres \"$$DATABASE_URL\" up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  api:
+    <<: *go
+    entrypoint: ["/app/api"]
+    expose:
+      - "8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  worker:
+    <<: *go
+    entrypoint: ["/app/worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  crawler:
+    <<: *go
+    entrypoint: ["/app/crawler"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    expose:
+      - "80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  pgdata:
+  miniodata:

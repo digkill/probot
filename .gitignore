@@ -1,0 +1,13 @@
+.env
+*.exe
+*.test
+bin/
+dist/
+tmp/
+.DS_Store
+apps/web/node_modules/
+apps/web/dist/
+coverage/
+.idea/
+.vscode/
+*.log

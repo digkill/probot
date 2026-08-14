@@ -1,0 +1,15 @@
+.git
+.gitignore
+**/.DS_Store
+bin
+tmp
+dist
+coverage
+*.log
+.env
+apps/web/node_modules
+apps/web/dist
+**/*.test
+.idea
+.vscode
+agent-transcripts

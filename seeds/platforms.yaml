@@ -1,0 +1,22 @@
+# Seed catalog reference (loaded via internal/catalog/seed.go on API boot)
+platforms:
+  - slug: telegram
+    kind: builtin
+  - slug: vk
+    kind: builtin
+  - slug: bluesky
+    kind: atproto
+  - slug: x
+    kind: builtin
+  - slug: reddit
+    kind: builtin
+  - slug: mastodon
+    kind: mastodon_like
+  - slug: lemmy
+    kind: mastodon_like
+  - slug: vc
+    kind: manual
+  - slug: habr
+    kind: manual
+  - slug: dzen
+    kind: manual

@@ -1,0 +1,14 @@
+-- +goose Up
+ALTER TABLE channels
+    ADD COLUMN IF NOT EXISTS fail_count INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ;
+
+ALTER TABLE mentions
+    ADD COLUMN IF NOT EXISTS draft_reply TEXT NOT NULL DEFAULT '';
+
+-- +goose Down
+ALTER TABLE mentions DROP COLUMN IF EXISTS draft_reply;
+ALTER TABLE channels DROP COLUMN IF EXISTS last_success_at;
+ALTER TABLE channels DROP COLUMN IF EXISTS last_error;
+ALTER TABLE channels DROP COLUMN IF EXISTS fail_count;
