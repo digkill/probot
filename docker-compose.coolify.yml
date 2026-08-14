@@ -97,31 +97,19 @@ services:
         touch /tmp/ready
         exec tail -f /dev/null
     healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/ready"]
-      interval: 2s
-      timeout: 2s
+      test: ["CMD-SHELL", "test -f /tmp/ready"]
+      interval: 3s
+      timeout: 3s
       retries: 30
-
-  migrate:
-    <<: *go
-    entrypoint: ["/bin/sh", "-c", "goose -dir /migrations postgres \"$$DATABASE_URL\" up && touch /tmp/ready && exec tail -f /dev/null"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/ready"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
+      start_period: 10s
 
   api:
     <<: *go
-    entrypoint: ["/app/api"]
+    entrypoint: ["/bin/sh", "-c", "/usr/local/bin/goose -dir /migrations postgres \"$$DATABASE_URL\" up && exec /app/api"]
     expose:
       - "8080"
     depends_on:
-      migrate:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -139,7 +127,7 @@ services:
     <<: *go
     entrypoint: ["/app/worker"]
     depends_on:
-      migrate:
+      api:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -149,7 +137,7 @@ services:
     <<: *go
     entrypoint: ["/app/crawler"]
     depends_on:
-      migrate:
+      api:
         condition: service_healthy
       redis:
         condition: service_healthy
