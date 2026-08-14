@@ -1,3 +1,5 @@
+import { currentLocale, localizeKnownError, translate } from './i18n'
+
 const TOKEN_KEY = 'probot_token'
 const WS_KEY = 'probot_workspace'
 
@@ -20,6 +22,7 @@ export function setWorkspaceId(id: string) {
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {})
   headers.set('Content-Type', 'application/json')
+  headers.set('Accept-Language', currentLocale() === 'ru' ? 'ru' : 'en')
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const res = await fetch(path, { ...init, headers })
@@ -29,22 +32,23 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 function friendlyError(raw: string, status: number): string {
+  const locale = currentLocale()
   const msg = raw.trim()
   const lower = msg.toLowerCase()
   if (lower.includes('users_email') || (lower.includes('duplicate key') && lower.includes('email'))) {
-    return 'This email is already registered. Sign in instead.'
+    return translate(locale, 'err.emailTaken')
   }
   if (lower.includes('duplicate key') || lower.includes('sqlstate') || lower.includes('violates unique')) {
-    return 'This value is already in use.'
+    return translate(locale, 'err.valueTaken')
   }
   if (lower.includes('sqlstate') || lower.includes('pq:') || lower.includes('violates')) {
-    return 'Something went wrong. Please try again.'
+    return translate(locale, 'err.generic')
   }
-  if (msg) return msg
-  if (status === 401) return 'Wrong email or password.'
-  if (status === 403) return "You don't have access to this workspace."
-  if (status === 404) return 'Not found.'
-  return 'Something went wrong. Please try again.'
+  if (msg) return localizeKnownError(msg, locale)
+  if (status === 401) return translate(locale, 'err.wrongPass')
+  if (status === 403) return translate(locale, 'err.forbidden')
+  if (status === 404) return translate(locale, 'err.notFound')
+  return translate(locale, 'err.generic')
 }
 
 export function wsPath(suffix: string) {

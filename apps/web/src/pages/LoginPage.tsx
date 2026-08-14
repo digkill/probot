@@ -2,9 +2,11 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, setToken, setWorkspaceId } from '../api'
+import { LangSwitch, useI18n } from '../i18n'
 
 export default function LoginPage() {
   const nav = useNavigate()
+  const { t } = useI18n()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -36,14 +38,16 @@ export default function LoginPage() {
           body: JSON.stringify({ email, password }),
         })
         setToken(res.token)
-        if (!res.workspaces?.length) throw new Error('no workspaces')
+        if (!res.workspaces?.length) throw new Error(t('login.noWorkspaces'))
         setWorkspaceId(res.workspaces[0].id)
       }
       nav('/')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+      const msg = err instanceof Error ? err.message : t('err.generic')
       setError(msg)
-      if (msg.toLowerCase().includes('already registered')) setMode('login')
+      if (msg.toLowerCase().includes('зарегистрирован') || msg.toLowerCase().includes('already registered')) {
+        setMode('login')
+      }
     } finally {
       setLoading(false)
     }
@@ -52,31 +56,34 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen grid place-items-center px-4">
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-[var(--card)] p-8 shadow-2xl">
-        <h1 className="text-3xl font-semibold mb-2">
-          <span className="text-[var(--accent)]">P</span>Robot
-        </h1>
-        <p className="text-[var(--muted)] mb-6 text-sm">Publish everywhere. Cross-link. Amplify.</p>
+        <div className="flex items-start justify-between mb-2">
+          <h1 className="text-3xl font-semibold">
+            <span className="text-[var(--accent)]">P</span>Robot
+          </h1>
+          <LangSwitch />
+        </div>
+        <p className="text-[var(--muted)] mb-6 text-sm">{t('login.tagline')}</p>
         <div className="flex gap-2 mb-6 text-sm">
-          <button type="button" onClick={() => setMode('register')} className={mode === 'register' ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}>Register</button>
-          <button type="button" onClick={() => setMode('login')} className={mode === 'login' ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}>Login</button>
+          <button type="button" onClick={() => setMode('register')} className={mode === 'register' ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}>{t('login.register')}</button>
+          <button type="button" onClick={() => setMode('login')} className={mode === 'login' ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}>{t('login.login')}</button>
         </div>
         <label className="block text-sm mb-3">
-          <span className="text-[var(--muted)]">Email</span>
+          <span className="text-[var(--muted)]">{t('login.email')}</span>
           <input className="mt-1 w-full rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label className="block text-sm mb-3">
-          <span className="text-[var(--muted)]">Password</span>
+          <span className="text-[var(--muted)]">{t('login.password')}</span>
           <input type="password" className="mt-1 w-full rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         {mode === 'register' && (
           <label className="block text-sm mb-3">
-            <span className="text-[var(--muted)]">Workspace slug</span>
+            <span className="text-[var(--muted)]">{t('login.workspace')}</span>
             <input className="mt-1 w-full rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={workspaceSlug} onChange={(e) => setWorkspaceSlug(e.target.value)} />
           </label>
         )}
         {error && <p className="text-[var(--danger)] text-sm mb-3">{error}</p>}
         <button disabled={loading} className="w-full rounded-lg bg-[var(--accent)] text-black font-semibold py-2.5 disabled:opacity-60">
-          {loading ? '…' : mode === 'register' ? 'Create workspace' : 'Sign in'}
+          {loading ? '…' : mode === 'register' ? t('login.create') : t('login.signin')}
         </button>
       </form>
     </div>

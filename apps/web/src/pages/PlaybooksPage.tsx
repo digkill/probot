@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, wsPath } from '../api'
+import { useI18n } from '../i18n'
 
 type Playbook = {
   id: string
@@ -12,6 +13,7 @@ type Campaign = { id: string; name: string; playbook: string }
 type Content = { id: string; title: string }
 
 export default function PlaybooksPage() {
+  const { t } = useI18n()
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [content, setContent] = useState<Content[]>([])
@@ -37,7 +39,7 @@ export default function PlaybooksPage() {
 
   async function apply(e: FormEvent) {
     e.preventDefault()
-    if (!campaignId || !contentId) return setMsg('Need campaign + content')
+    if (!campaignId || !contentId) return setMsg(t('playbooks.needBoth'))
     const res = await api<{
       publications: unknown[]
       skipped: string[]
@@ -51,9 +53,13 @@ export default function PlaybooksPage() {
       }),
     })
     setResult(
-      `Queued ${res.publications?.length || 0} pubs · skipped: ${(res.skipped || []).join(', ') || '—'} · missing required: ${(res.missing_required || []).join(', ') || '—'}`,
+      t('playbooks.result', {
+        n: res.publications?.length || 0,
+        skipped: (res.skipped || []).join(', ') || '—',
+        missing: (res.missing_required || []).join(', ') || '—',
+      }),
     )
-    setMsg('Playbook applied')
+    setMsg(t('playbooks.applied'))
   }
 
   const selected = playbooks.find((p) => p.id === playbookId)
@@ -61,8 +67,8 @@ export default function PlaybooksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">Playbooks</h2>
-        <p className="text-sm text-[var(--muted)]">Amplification presets with delays and cross-link order.</p>
+        <h2 className="text-2xl font-semibold">{t('playbooks.title')}</h2>
+        <p className="text-sm text-[var(--muted)]">{t('playbooks.subtitle')}</p>
       </div>
       {msg && <p className="text-[var(--accent2)] text-sm">{msg}</p>}
 
@@ -74,8 +80,8 @@ export default function PlaybooksPage() {
             onClick={() => setPlaybookId(p.id)}
             className={`text-left rounded-xl border p-4 ${playbookId === p.id ? 'border-[var(--accent)] bg-[var(--card)]' : 'border-[var(--line)] bg-[var(--card)]'}`}
           >
-            <div className="font-medium">{p.name}</div>
-            <div className="text-xs text-[var(--muted)] mt-1">{p.description}</div>
+            <div className="font-medium">{t(`playbook.${p.id}.name`)}</div>
+            <div className="text-xs text-[var(--muted)] mt-1">{t(`playbook.${p.id}.desc`)}</div>
           </button>
         ))}
       </div>
@@ -98,7 +104,7 @@ export default function PlaybooksPage() {
         <select className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={contentId} onChange={(e) => setContentId(e.target.value)}>
           {content.map((c) => <option key={c.id} value={c.id}>{c.title || c.id.slice(0, 8)}</option>)}
         </select>
-        <button className="rounded-lg bg-[var(--accent)] text-black font-medium">Apply & enqueue</button>
+        <button className="rounded-lg bg-[var(--accent)] text-black font-medium">{t('playbooks.apply')}</button>
       </form>
       {result && <p className="text-sm text-[var(--muted)]">{result}</p>}
     </div>

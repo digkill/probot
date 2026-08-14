@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, Link, useNavigate } from 'react-router-dom'
 import { getToken, getWorkspaceId, setToken, setWorkspaceId } from './api'
+import { LangSwitch, useI18n } from './i18n'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ContentPage from './pages/ContentPage'
@@ -14,6 +15,7 @@ import KarmaPage from './pages/KarmaPage'
 
 function Shell({ children }: { children: React.ReactNode }) {
   const nav = useNavigate()
+  const { t } = useI18n()
   const logout = () => {
     setToken('')
     setWorkspaceId('')
@@ -27,21 +29,24 @@ function Shell({ children }: { children: React.ReactNode }) {
             <span className="text-[var(--accent)]">P</span>Robot
           </Link>
           <nav className="flex gap-4 text-sm text-[var(--muted)]">
-            <Link to="/">Overview</Link>
-            <Link to="/content">Content</Link>
-            <Link to="/platforms">Platforms</Link>
-            <Link to="/agents">Agents</Link>
-            <Link to="/playbooks">Playbooks</Link>
-            <Link to="/links">Links</Link>
-            <Link to="/analytics">Analytics</Link>
-            <Link to="/karma">Karma</Link>
-            <Link to="/mentions">Reputation</Link>
-            <Link to="/graph">Graph</Link>
+            <Link to="/">{t('nav.overview')}</Link>
+            <Link to="/content">{t('nav.content')}</Link>
+            <Link to="/platforms">{t('nav.platforms')}</Link>
+            <Link to="/agents">{t('nav.agents')}</Link>
+            <Link to="/playbooks">{t('nav.playbooks')}</Link>
+            <Link to="/links">{t('nav.links')}</Link>
+            <Link to="/analytics">{t('nav.analytics')}</Link>
+            <Link to="/karma">{t('nav.karma')}</Link>
+            <Link to="/mentions">{t('nav.mentions')}</Link>
+            <Link to="/graph">{t('nav.graph')}</Link>
           </nav>
         </div>
-        <button onClick={logout} className="text-sm text-[var(--muted)] hover:text-white">
-          Logout
-        </button>
+        <div className="flex items-center gap-4">
+          <LangSwitch />
+          <button onClick={logout} className="text-sm text-[var(--muted)] hover:text-white">
+            {t('nav.logout')}
+          </button>
+        </div>
       </header>
       <main className="px-6 py-8 max-w-6xl mx-auto">{children}</main>
     </div>

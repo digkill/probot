@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, wsPath } from '../api'
+import { useI18n } from '../i18n'
 
 type Brand = { id: string; name: string }
 type Campaign = { id: string; name: string }
@@ -8,13 +9,19 @@ type Channel = { id: string; name: string }
 type Content = { id: string; title: string; body: string; status: string }
 
 export default function ContentPage() {
+  const { t } = useI18n()
   const [brands, setBrands] = useState<Brand[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [content, setContent] = useState<Content[]>([])
-  const [title, setTitle] = useState('Launch post')
-  const [body, setBody] = useState('We just shipped something useful. Try it:')
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
   const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    if (!title) setTitle(t('content.defaultTitle'))
+    if (!body) setBody(t('content.defaultBody'))
+  }, [t])
 
   async function load() {
     const [b, c, ch, ct] = await Promise.all([
@@ -33,7 +40,7 @@ export default function ContentPage() {
 
   async function createContent(e: FormEvent) {
     e.preventDefault()
-    if (!brands[0]) return setMsg('Create a brand first')
+    if (!brands[0]) return setMsg(t('content.needBrand'))
     await api(wsPath('/content'), {
       method: 'POST',
       body: JSON.stringify({
@@ -48,14 +55,14 @@ export default function ContentPage() {
         status: 'ready',
       }),
     })
-    setMsg('Content created')
+    setMsg(t('content.created'))
     await load()
   }
 
   async function scheduleAll() {
     const piece = content[0]
-    if (!piece) return setMsg('No content')
-    if (!channels.length) return setMsg('Add channels in Platforms')
+    if (!piece) return setMsg(t('content.noContent'))
+    if (!channels.length) return setMsg(t('content.needChannels'))
     for (let i = 0; i < channels.length; i++) {
       await api(wsPath('/publications'), {
         method: 'POST',
@@ -68,22 +75,22 @@ export default function ContentPage() {
         }),
       })
     }
-    setMsg(`Enqueued ${channels.length} publications`)
+    setMsg(t('content.enqueued', { n: channels.length }))
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">Content & queue</h2>
-        <p className="text-sm text-[var(--muted)]">Draft once, fan-out with cross-links.</p>
+        <h2 className="text-2xl font-semibold">{t('content.title')}</h2>
+        <p className="text-sm text-[var(--muted)]">{t('content.subtitle')}</p>
       </div>
       {msg && <p className="text-[var(--accent2)] text-sm">{msg}</p>}
       <form onSubmit={createContent} className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-5 space-y-3">
-        <input className="w-full rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+        <input className="w-full rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('content.placeholderTitle')} />
         <textarea className="w-full min-h-32 rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={body} onChange={(e) => setBody(e.target.value)} />
         <div className="flex gap-3">
-          <button className="rounded-lg bg-[var(--accent)] text-black font-medium px-4 py-2">Save content</button>
-          <button type="button" onClick={scheduleAll} className="rounded-lg border border-[var(--line)] px-4 py-2">Enqueue to all channels</button>
+          <button className="rounded-lg bg-[var(--accent)] text-black font-medium px-4 py-2">{t('content.save')}</button>
+          <button type="button" onClick={scheduleAll} className="rounded-lg border border-[var(--line)] px-4 py-2">{t('content.enqueue')}</button>
         </div>
       </form>
       <ul className="space-y-2 text-sm text-[var(--muted)]">

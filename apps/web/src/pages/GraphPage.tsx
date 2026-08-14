@@ -12,6 +12,7 @@ import {
   DynamicTexture,
 } from '@babylonjs/core'
 import { api, wsPath } from '../api'
+import { useI18n } from '../i18n'
 
 type Campaign = { id: string; name: string }
 type Graph = {
@@ -21,9 +22,14 @@ type Graph = {
 
 export default function GraphPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { t } = useI18n()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [campaignId, setCampaignId] = useState('')
-  const [info, setInfo] = useState('Pick a campaign')
+  const [info, setInfo] = useState('')
+
+  useEffect(() => {
+    if (!campaignId) setInfo(t('graph.pick'))
+  }, [t, campaignId])
 
   useEffect(() => {
     api<Campaign[]>(wsPath('/campaigns')).then((c) => {
@@ -84,7 +90,7 @@ export default function GraphPage() {
         lines.color = e.kind === 'canonical' ? Color3.FromHexString('#f0b429') : Color3.FromHexString('#8b9bb8')
       })
 
-      setInfo(`${nodes.length} nodes · ${edges.length} edges`)
+      setInfo(t('graph.stats', { nodes: nodes.length, edges: edges.length }))
       engine.runRenderLoop(() => scene.render())
       const onResize = () => engine?.resize()
       window.addEventListener('resize', onResize)
@@ -101,7 +107,7 @@ export default function GraphPage() {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold">Amplification graph</h2>
+          <h2 className="text-2xl font-semibold">{t('graph.title')}</h2>
           <p className="text-sm text-[var(--muted)]">{info}</p>
         </div>
         <select className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
