@@ -27,7 +27,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const res = await fetch(path, { ...init, headers })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(friendlyError(String(data.error || ''), res.status))
+  if (!res.ok) {
+    if (res.status === 401 && token) {
+      setToken('')
+      setWorkspaceId('')
+      if (location.pathname !== '/login') location.href = '/login'
+    }
+    throw new Error(friendlyError(String(data.error || ''), res.status))
+  }
   return data as T
 }
 
