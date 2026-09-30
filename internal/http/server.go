@@ -28,6 +28,7 @@ type Server struct {
 	ai        *ai.Client
 	asynq     *asynq.Client
 	generic   *generic.Publisher
+	telegram  *service.TelegramService
 }
 
 func NewServer(
@@ -35,6 +36,7 @@ func NewServer(
 	st *store.Store,
 	registry *platforms.Registry,
 	asynqClient *asynq.Client,
+	telegramService *service.TelegramService,
 ) *Server {
 	gen := generic.NewPublisher()
 	pub := &service.Publisher{
@@ -46,6 +48,7 @@ func NewServer(
 	}
 	return &Server{
 		cfg:       cfg,
+		telegram:  telegramService,
 		store:     st,
 		registry:  registry,
 		publisher: pub,
@@ -60,7 +63,7 @@ func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(safeAccessLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost", "http://localhost:80", "*"},
@@ -85,6 +88,7 @@ func (s *Server) Router() http.Handler {
 
 			r.Route("/workspaces/{workspaceID}", func(r chi.Router) {
 				r.Use(s.workspaceMiddleware)
+				r.Route("/telegram", s.telegramRoutes)
 				r.Get("/brands", s.handleListBrands)
 				r.Post("/brands", s.handleCreateBrand)
 				r.Patch("/brands/{brandID}", s.handleUpdateBrand)
