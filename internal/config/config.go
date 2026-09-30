@@ -5,28 +5,39 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
 
+type TelegramConfig struct {
+	Enabled     bool
+	AppID       int
+	AppHash     string
+	RPCRate     float64
+	MaxAccounts int
+	AuthTTL     time.Duration
+}
+
 type Config struct {
-	AppEnv        string
-	HTTPAddr      string
-	DatabaseURL   string
-	RedisURL      string
-	JWTSecret     string
-	EncryptionKey string
+	TelegramClient TelegramConfig
+	AppEnv         string
+	HTTPAddr       string
+	DatabaseURL    string
+	RedisURL       string
+	JWTSecret      string
+	EncryptionKey  string
 
 	OpenAIAPIKey  string
 	OpenAIBaseURL string
 	OpenAIModel   string
 
-	AnthropicAPIKey  string
-	AnthropicModel   string
-	GrokAPIKey       string
-	GrokModel        string
-	GeminiAPIKey     string
-	GeminiModel      string
+	AnthropicAPIKey string
+	AnthropicModel  string
+	GrokAPIKey      string
+	GrokModel       string
+	GeminiAPIKey    string
+	GeminiModel     string
 
 	ImageAPIKey  string
 	ImageBaseURL string
@@ -85,6 +96,32 @@ func Load() (*Config, error) {
 	}
 	if len(cfg.EncryptionKey) != 32 {
 		return nil, fmt.Errorf("ENCRYPTION_KEY must be 32 bytes")
+	}
+	enabled, err := strconv.ParseBool(getEnv("TELEGRAM_CLIENT_ENABLED", "false"))
+	if err != nil {
+		return nil, fmt.Errorf("TELEGRAM_CLIENT_ENABLED must be a boolean")
+	}
+	cfg.TelegramClient = TelegramConfig{Enabled: enabled, RPCRate: 1, MaxAccounts: 10, AuthTTL: 5 * time.Minute}
+	if enabled {
+		cfg.TelegramClient.AppID, err = strconv.Atoi(getEnv("TELEGRAM_APP_ID", "0"))
+		if err != nil || cfg.TelegramClient.AppID <= 0 {
+			return nil, fmt.Errorf("TELEGRAM_APP_ID must be a positive integer")
+		}
+		cfg.TelegramClient.AppHash = getEnv("TELEGRAM_APP_HASH", "")
+		if cfg.TelegramClient.AppHash == "" {
+			return nil, fmt.Errorf("TELEGRAM_APP_HASH is required")
+		}
+		cfg.TelegramClient.RPCRate, err = strconv.ParseFloat(getEnv("TELEGRAM_RPC_RATE", "1"), 64)
+		if err != nil || !(cfg.TelegramClient.RPCRate > 0 && cfg.TelegramClient.RPCRate <= 10) {
+			return nil, fmt.Errorf("TELEGRAM_RPC_RATE must be between 0 and 10")
+		}
+		cfg.TelegramClient.MaxAccounts, err = strconv.Atoi(getEnv("TELEGRAM_MAX_ACCOUNTS", "10"))
+		if err != nil || cfg.TelegramClient.MaxAccounts < 1 || cfg.TelegramClient.MaxAccounts > 100 {
+			return nil, fmt.Errorf("TELEGRAM_MAX_ACCOUNTS must be between 1 and 100")
+		}
+		if cfg.EncryptionKey == "0123456789abcdef0123456789abcdef" {
+			return nil, fmt.Errorf("set a private ENCRYPTION_KEY before enabling Telegram clients")
+		}
 	}
 	return cfg, nil
 }

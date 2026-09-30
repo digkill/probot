@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,7 +15,9 @@ import (
 	httpapi "github.com/digkill/probot/internal/http"
 	"github.com/digkill/probot/internal/platformreg"
 	"github.com/digkill/probot/internal/queue"
+	"github.com/digkill/probot/internal/service"
 	"github.com/digkill/probot/internal/store"
+	tgclient "github.com/digkill/probot/internal/telegram"
 	"github.com/hibiken/asynq"
 )
 
@@ -23,7 +26,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	ctx := context.Background()
+	ctx, cancelRoot := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancelRoot()
 	st, err := store.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("store: %v", err)
@@ -43,9 +47,34 @@ func main() {
 
 	registry := platformreg.Default()
 
-	srv := httpapi.NewServer(cfg, st, registry, asynqClient)
+	var telegramManager *tgclient.AccountManager
+	var telegramService *service.TelegramService
+	if cfg.TelegramClient.Enabled {
+		tc := cfg.TelegramClient
+		repo, err := store.NewTelegramStore(st.Pool, cfg.EncryptionKey)
+		if err != nil {
+			log.Fatal("telegram: invalid storage configuration")
+		}
+		factory, err := tgclient.NewFactory(tgclient.Config{AppID: tc.AppID, AppHash: tc.AppHash, EncryptionKey: cfg.EncryptionKey, RPCRate: tc.RPCRate, MaxAccounts: tc.MaxAccounts, AuthTTL: tc.AuthTTL}, repo, repo, log.Default())
+		if err != nil {
+			log.Fatal("telegram: invalid client configuration")
+		}
+		telegramManager, err = tgclient.NewAccountManager(ctx, repo, factory, log.Default(), tc.MaxAccounts)
+		if err != nil {
+			log.Fatal("telegram: invalid manager configuration")
+		}
+		telegramService, err = service.NewTelegramService(repo, telegramManager)
+		if err != nil {
+			log.Fatal("telegram: invalid service configuration")
+		}
+		if err := telegramManager.Restore(ctx); err != nil {
+			log.Print("component=telegram operation=restore status=failed")
+		}
+	}
+	srv := httpapi.NewServer(cfg, st, registry, asynqClient, telegramService)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
 		Handler:           srv.Router(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -57,10 +86,13 @@ func main() {
 		}
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	<-ctx.Done()
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
 	defer cancel()
 	_ = httpServer.Shutdown(shutdownCtx)
+	if telegramManager != nil {
+		if err := telegramManager.Stop(shutdownCtx); err != nil {
+			log.Print("component=telegram operation=shutdown status=timeout")
+		}
+	}
 }
