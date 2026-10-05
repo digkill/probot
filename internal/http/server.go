@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/digkill/probot/internal/ai"
 	"github.com/digkill/probot/internal/auth"
 	"github.com/digkill/probot/internal/config"
+	"github.com/digkill/probot/internal/mail"
 	"github.com/digkill/probot/internal/platforms"
 	"github.com/digkill/probot/internal/platforms/generic"
 	"github.com/digkill/probot/internal/service"
@@ -29,6 +31,7 @@ type Server struct {
 	asynq     *asynq.Client
 	generic   *generic.Publisher
 	telegram  *service.TelegramService
+	mailer    mail.Sender
 }
 
 func NewServer(
@@ -56,6 +59,10 @@ func NewServer(
 		ai:        ai.NewClient(cfg),
 		asynq:     asynqClient,
 		generic:   gen,
+		mailer: mail.New(mail.Config{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser,
+			Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
+		}, log.Default()),
 	}
 }
 
@@ -80,6 +87,8 @@ func (s *Server) Router() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/register", s.handleRegister)
 		r.Post("/auth/login", s.handleLogin)
+		r.Post("/auth/password/forgot", s.handleForgotPassword)
+		r.Post("/auth/password/reset", s.handleResetPassword)
 		r.Get("/playbooks", s.handleListPlaybooks)
 
 		r.Group(func(r chi.Router) {

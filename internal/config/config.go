@@ -54,6 +54,12 @@ type Config struct {
 	S3Bucket    string
 	S3UseSSL    bool
 
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+
 	PublicBaseURL string
 }
 
@@ -89,7 +95,16 @@ func Load() (*Config, error) {
 		S3Bucket:         getEnv("S3_BUCKET", "probot"),
 		S3UseSSL:         getEnvBool("S3_USE_SSL", false),
 		PublicBaseURL:    getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		SMTPHost:         getEnv("SMTP_HOST", ""),
+		SMTPUser:         getEnv("SMTP_USER", ""),
+		SMTPPassword:     getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:         getEnv("SMTP_FROM", "PRobot <no-reply@prbo.ru>"),
 	}
+	smtpPort, err := strconv.Atoi(getEnv("SMTP_PORT", "587"))
+	if err != nil || smtpPort <= 0 || smtpPort > 65535 {
+		return nil, fmt.Errorf("SMTP_PORT must be a port number")
+	}
+	cfg.SMTPPort = smtpPort
 
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")

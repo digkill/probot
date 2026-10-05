@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, Link, useNavigate } from 'react-router-dom'
 import { getToken, getWorkspaceId, setToken, setWorkspaceId } from './api'
 import { LangSwitch, useI18n } from './i18n'
 import LoginPage from './pages/LoginPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import DashboardPage from './pages/DashboardPage'
 import ContentPage from './pages/ContentPage'
 import PlatformsPage from './pages/PlatformsPage'
@@ -62,6 +63,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/" element={<Private><DashboardPage /></Private>} />
       <Route path="/content" element={<Private><ContentPage /></Private>} />
       <Route path="/platforms" element={<Private><PlatformsPage /></Private>} />

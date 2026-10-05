@@ -36,6 +36,11 @@ x-app-env: &app-env
   S3_BUCKET: ${S3_BUCKET:-probot}
   S3_USE_SSL: "false"
   PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://prbo.ru}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-PRobot <no-reply@prbo.ru>}
 
 x-go: &go
   build:
