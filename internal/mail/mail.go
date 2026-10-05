@@ -81,7 +81,12 @@ func (s smtpSender) Send(ctx context.Context, to, subject, body string) error {
 		}
 	}
 	if s.cfg.User != "" {
-		if err := c.Auth(smtp.PlainAuth("", s.cfg.User, s.cfg.Password, s.cfg.Host)); err != nil {
+		_, mechs := c.Extension("AUTH")
+		auth, err := pickAuth(mechs, s.cfg)
+		if err != nil {
+			return err
+		}
+		if err := c.Auth(auth); err != nil {
 			return fmt.Errorf("smtp auth: %w", err)
 		}
 	}
@@ -104,6 +109,46 @@ func (s smtpSender) Send(ctx context.Context, to, subject, body string) error {
 		return fmt.Errorf("smtp send: %w", err)
 	}
 	return c.Quit()
+}
+
+func pickAuth(mechs string, cfg Config) (smtp.Auth, error) {
+	upper := " " + strings.ToUpper(mechs) + " "
+	switch {
+	case strings.Contains(upper, " PLAIN "):
+		return smtp.PlainAuth("", cfg.User, cfg.Password, cfg.Host), nil
+	case strings.Contains(upper, " LOGIN "):
+		return loginAuth{user: cfg.User, pass: cfg.Password, host: cfg.Host}, nil
+	default:
+		return nil, fmt.Errorf("smtp auth: no supported mechanism in %q", mechs)
+	}
+}
+
+// loginAuth implements AUTH LOGIN, which some providers (e.g. Beget) offer instead of PLAIN.
+type loginAuth struct{ user, pass, host string }
+
+func (a loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if !server.TLS {
+		return "", nil, errors.New("refusing AUTH LOGIN over an unencrypted connection")
+	}
+	if server.Name != a.host {
+		return "", nil, errors.New("wrong host name")
+	}
+	return "LOGIN", nil, nil
+}
+
+func (a loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	prompt := strings.ToLower(string(fromServer))
+	switch {
+	case strings.Contains(prompt, "user"):
+		return []byte(a.user), nil
+	case strings.Contains(prompt, "pass"):
+		return []byte(a.pass), nil
+	default:
+		return nil, errors.New("unexpected AUTH LOGIN challenge")
+	}
 }
 
 func buildMessage(from, to, subject, body string, now time.Time) ([]byte, error) {
