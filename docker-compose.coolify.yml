@@ -1,10 +1,13 @@
 # Coolify production stack. Do not publish host ports 80/443/8080 —
 # Traefik already binds them. Domain https://prbo.ru is attached to `web`.
+# Coolify also joins these containers to the shared `coolify` network, where
+# generic names like `postgres`/`redis` resolve to other apps and Coolify's own
+# DB, so stateful services get project-unique names.
 x-app-env: &app-env
   APP_ENV: ${APP_ENV:-production}
   HTTP_ADDR: :8080
-  DATABASE_URL: postgres://probot:${POSTGRES_PASSWORD}@postgres:5432/probot?sslmode=disable
-  REDIS_URL: redis://redis:6379/0
+  DATABASE_URL: postgres://probot:${POSTGRES_PASSWORD}@probot-postgres:5432/probot?sslmode=disable
+  REDIS_URL: redis://probot-redis:6379/0
   JWT_SECRET: ${JWT_SECRET}
   ENCRYPTION_KEY: ${ENCRYPTION_KEY}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -51,7 +54,7 @@ x-go: &go
     <<: *app-env
 
 services:
-  postgres:
+  probot-postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: probot
@@ -66,7 +69,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  redis:
+  probot-redis:
     image: redis:7-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -81,9 +84,9 @@ services:
     expose:
       - "8080"
     depends_on:
-      postgres:
+      probot-postgres:
         condition: service_healthy
-      redis:
+      probot-redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
@@ -99,7 +102,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      redis:
+      probot-redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -109,7 +112,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      redis:
+      probot-redis:
         condition: service_healthy
     restart: unless-stopped
 
