@@ -20,3 +20,13 @@ platforms:
     kind: manual
   - slug: dzen
     kind: manual
+  - slug: facebook
+    kind: builtin
+  - slug: instagram
+    kind: builtin
+  - slug: threads
+    kind: builtin
+  - slug: linkedin
+    kind: builtin
+  - slug: setka
+    kind: manual

@@ -7,6 +7,8 @@ type Platform = { id: string; slug: string; name: string; kind: string; publish_
 type Brand = { id: string; name: string }
 type Channel = { id: string; name: string; external_ref: string; health: string }
 
+const HINTED = new Set(['facebook', 'instagram', 'threads', 'linkedin', 'setka'])
+
 export default function PlatformsPage() {
   const { t } = useI18n()
   const [platforms, setPlatforms] = useState<Platform[]>([])
@@ -91,6 +93,7 @@ export default function PlatformsPage() {
         <input className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" placeholder={t('platforms.channelName')} value={name} onChange={(e) => setName(e.target.value)} />
         <input className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" placeholder={t('platforms.externalRef')} value={externalRef} onChange={(e) => setExternalRef(e.target.value)} />
         <input className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" placeholder={t('platforms.token')} value={token} onChange={(e) => setToken(e.target.value)} />
+        {HINTED.has(slug) && <p className="md:col-span-2 text-xs text-[var(--muted)]">{t(`platforms.hint.${slug}`)}</p>}
         <button className="md:col-span-2 rounded-lg bg-[var(--accent)] text-black font-medium py-2">{t('platforms.connectBtn')}</button>
       </form>
 
