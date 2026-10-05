@@ -54,7 +54,7 @@ func (s *Store) GetMention(ctx context.Context, id uuid.UUID) (*domain.Mention, 
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, workspace_id, brand_id, campaign_id, source, url, title, snippet, author,
 		       status, found_at, draft_reply, sentiment, severity, watch_query
-		FROM mentions WHERE id=$1
+		FROM mentions WHERE id=$1 AND deleted_at IS NULL
 	`, id).Scan(&m.ID, &m.WorkspaceID, &m.BrandID, &m.CampaignID, &m.Source, &m.URL, &m.Title, &m.Snippet, &m.Author, &m.Status, &m.FoundAt, &m.DraftReply, &m.Sentiment, &m.Severity, &m.WatchQuery)
 	if err != nil {
 		return nil, err

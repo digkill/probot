@@ -224,9 +224,9 @@ func (s *Server) handleMentionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch req.Status {
-	case "new", "reviewed", "replied", "ignored", "escalated":
+	case "new", "reviewed", "replied", "ignored", "escalated", "false_positive":
 	default:
-		writeErr(w, http.StatusBadRequest, "status must be new|reviewed|replied|ignored|escalated")
+		writeErr(w, http.StatusBadRequest, "status must be new|reviewed|replied|ignored|escalated|false_positive")
 		return
 	}
 	if err := s.store.SetMentionStatus(r.Context(), m.ID, req.Status); err != nil {

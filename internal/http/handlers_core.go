@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) handleListBrands(w http.ResponseWriter, r *http.Request) {
@@ -354,10 +356,49 @@ func (s *Server) handleCreateMention(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256([]byte(req.URL + "|" + req.Title))
 	hash := hex.EncodeToString(sum[:])
 	if err := s.store.UpsertMention(r.Context(), &req, hash); err != nil {
+		if errors.Is(err, store.ErrMentionSuppressed) {
+			writeErr(w, http.StatusConflict, store.ErrMentionSuppressed.Error())
+			return
+		}
 		writeCause(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, req)
+}
+
+func (s *Server) handleDeleteMention(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "mentionID"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid mention id")
+		return
+	}
+	if err := s.store.DeleteMention(r.Context(), mustWorkspaceID(r), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "mention not found")
+			return
+		}
+		writeCause(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleDeleteFalsePositiveMentions(w http.ResponseWriter, r *http.Request) {
+	var brandID *uuid.UUID
+	if raw := r.URL.Query().Get("brand_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid brand_id")
+			return
+		}
+		brandID = &id
+	}
+	n, err := s.store.DeleteFalsePositiveMentions(r.Context(), mustWorkspaceID(r), brandID)
+	if err != nil {
+		writeCause(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"deleted": n})
 }
 
 func mentionHash(url, title string) string {

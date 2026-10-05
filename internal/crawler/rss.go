@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -122,6 +123,9 @@ func (r *Runner) IngestPublic(ctx context.Context, workspaceID uuid.UUID, brandI
 	sum := sha256.Sum256([]byte(link + "|" + title))
 	hash := hex.EncodeToString(sum[:])
 	if err := r.Store.UpsertMention(ctx, m, hash); err != nil {
+		if errors.Is(err, store.ErrMentionSuppressed) {
+			return 0, nil
+		}
 		return 0, err
 	}
 	return 1, nil

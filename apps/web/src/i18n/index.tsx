@@ -41,6 +41,7 @@ export function localizeKnownError(msg: string, locale: Locale): string {
     ['Password must be at least', 'err.passwordShort'],
     ['Password is too long', 'err.passwordLong'],
     ['Email is required', 'err.emailRequired'],
+    ['deleted or marked as wrong', 'err.mentionSuppressed'],
     ['Session expired', 'err.session'],
     ['Please sign in', 'err.session'],
     ['Not found', 'err.notFound'],

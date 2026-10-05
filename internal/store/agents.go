@@ -11,6 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ErrMentionSuppressed means the link was deleted or marked as a false positive earlier.
+var ErrMentionSuppressed = errors.New("This link was deleted or marked as wrong earlier.")
+
 func (s *Store) CreateAgent(ctx context.Context, a *domain.AIAgent) error {
 	if a.Params == nil {
 		a.Params = json.RawMessage(`{}`)
@@ -111,12 +114,17 @@ func (s *Store) UpsertMention(ctx context.Context, m *domain.Mention, hash strin
 	if !m.FoundAt.IsZero() {
 		found = m.FoundAt
 	}
-	return s.Pool.QueryRow(ctx, `
+	err := s.Pool.QueryRow(ctx, `
 		INSERT INTO mentions (
 			workspace_id, brand_id, campaign_id, source, url, title, snippet, author,
 			status, hash, found_at, sentiment, severity, watch_query
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11, now()), $12,$13,$14)
+		SELECT $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::timestamptz, now()), $12, $13, $14
+		WHERE NOT EXISTS (
+			SELECT 1 FROM mentions
+			WHERE workspace_id = $1::uuid AND url = $5
+			  AND (deleted_at IS NOT NULL OR status = 'false_positive')
+		)
 		ON CONFLICT (workspace_id, hash) DO UPDATE SET
 			title=EXCLUDED.title,
 			snippet=EXCLUDED.snippet,
@@ -130,6 +138,10 @@ func (s *Store) UpsertMention(ctx context.Context, m *domain.Mention, hash strin
 		RETURNING id, found_at
 	`, m.WorkspaceID, m.BrandID, m.CampaignID, m.Source, m.URL, m.Title, m.Snippet, m.Author, m.Status, hash, found, m.Sentiment, m.Severity, m.WatchQuery).
 		Scan(&m.ID, &m.FoundAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrMentionSuppressed
+	}
+	return err
 }
 
 func (s *Store) ListMentions(ctx context.Context, workspaceID uuid.UUID) ([]domain.Mention, error) {
@@ -148,7 +160,7 @@ func (s *Store) ListMentionsFiltered(ctx context.Context, workspaceID uuid.UUID,
 	q := `
 		SELECT id, workspace_id, brand_id, campaign_id, source, url, title, snippet, author,
 		       status, found_at, draft_reply, sentiment, severity, watch_query
-		FROM mentions WHERE workspace_id=$1
+		FROM mentions WHERE workspace_id=$1 AND deleted_at IS NULL
 	`
 	args := []any{workspaceID}
 	n := 2
@@ -171,6 +183,8 @@ func (s *Store) ListMentionsFiltered(ctx context.Context, workspaceID uuid.UUID,
 		q += fmt.Sprintf(" AND status=$%d", n)
 		args = append(args, f.Status)
 		n++
+	} else {
+		q += " AND status <> 'false_positive'"
 	}
 	if f.OpenOnly {
 		q += " AND status IN ('new','reviewed','escalated')"
@@ -333,27 +347,61 @@ func (s *Store) DisableReviewSources(ctx context.Context, brandID uuid.UUID) err
 }
 
 func (s *Store) SetMentionStatus(ctx context.Context, id uuid.UUID, status string) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE mentions SET status=$2 WHERE id=$1`, id, status)
+	_, err := s.Pool.Exec(ctx, `UPDATE mentions SET status=$2 WHERE id=$1 AND deleted_at IS NULL`, id, status)
 	return err
 }
 
+// DeleteMention hides a mention for good; the row stays as a tombstone so crawlers skip its link.
+func (s *Store) DeleteMention(ctx context.Context, workspaceID, id uuid.UUID) error {
+	tag, err := s.Pool.Exec(ctx, `
+		UPDATE mentions SET deleted_at=now(), draft_reply=''
+		WHERE id=$1 AND workspace_id=$2 AND deleted_at IS NULL
+	`, id, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Store) DeleteFalsePositiveMentions(ctx context.Context, workspaceID uuid.UUID, brandID *uuid.UUID) (int64, error) {
+	q := `
+		UPDATE mentions SET deleted_at=now(), draft_reply=''
+		WHERE workspace_id=$1 AND status='false_positive' AND deleted_at IS NULL
+	`
+	args := []any{workspaceID}
+	if brandID != nil {
+		q += " AND brand_id=$2"
+		args = append(args, *brandID)
+	}
+	tag, err := s.Pool.Exec(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 type MentionInbox struct {
-	Total        int `json:"total"`
-	Negative     int `json:"negative"`
-	OpenNegative int `json:"open_negative"`
-	Escalated    int `json:"escalated"`
-	High         int `json:"high"`
+	Total         int `json:"total"`
+	Negative      int `json:"negative"`
+	OpenNegative  int `json:"open_negative"`
+	Escalated     int `json:"escalated"`
+	High          int `json:"high"`
+	FalsePositive int `json:"false_positive"`
 }
 
 func (s *Store) MentionInbox(ctx context.Context, workspaceID uuid.UUID, brandID *uuid.UUID) (MentionInbox, error) {
 	q := `
 		SELECT
-			COUNT(*)::int,
-			COUNT(*) FILTER (WHERE sentiment='negative')::int,
+			COUNT(*) FILTER (WHERE status<>'false_positive')::int,
+			COUNT(*) FILTER (WHERE sentiment='negative' AND status<>'false_positive')::int,
 			COUNT(*) FILTER (WHERE sentiment='negative' AND status IN ('new','reviewed','escalated'))::int,
 			COUNT(*) FILTER (WHERE status='escalated')::int,
-			COUNT(*) FILTER (WHERE severity='high')::int
-		FROM mentions WHERE workspace_id=$1
+			COUNT(*) FILTER (WHERE severity='high' AND status<>'false_positive')::int,
+			COUNT(*) FILTER (WHERE status='false_positive')::int
+		FROM mentions WHERE workspace_id=$1 AND deleted_at IS NULL
 	`
 	args := []any{workspaceID}
 	if brandID != nil {
@@ -361,13 +409,15 @@ func (s *Store) MentionInbox(ctx context.Context, workspaceID uuid.UUID, brandID
 		args = append(args, *brandID)
 	}
 	var out MentionInbox
-	err := s.Pool.QueryRow(ctx, q, args...).Scan(&out.Total, &out.Negative, &out.OpenNegative, &out.Escalated, &out.High)
+	err := s.Pool.QueryRow(ctx, q, args...).Scan(&out.Total, &out.Negative, &out.OpenNegative, &out.Escalated, &out.High, &out.FalsePositive)
 	return out, err
 }
 
 func (s *Store) CountMentionsBySentiment(ctx context.Context, workspaceID uuid.UUID) (map[string]int, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT sentiment, COUNT(*) FROM mentions WHERE workspace_id=$1 GROUP BY sentiment
+		SELECT sentiment, COUNT(*) FROM mentions
+		WHERE workspace_id=$1 AND deleted_at IS NULL AND status<>'false_positive'
+		GROUP BY sentiment
 	`, workspaceID)
 	if err != nil {
 		return nil, err

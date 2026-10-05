@@ -146,6 +146,8 @@ func (s *Server) Router() http.Handler {
 				r.Post("/mentions/{mentionID}/draft-reply", s.handleMentionDraftReply)
 				r.Post("/mentions/{mentionID}/objection", s.handleMentionObjection)
 				r.Post("/mentions/{mentionID}/status", s.handleMentionStatus)
+				r.Delete("/mentions/{mentionID}", s.handleDeleteMention)
+				r.Post("/mentions/delete-false-positives", s.handleDeleteFalsePositiveMentions)
 				r.Post("/mentions/{mentionID}/engage", s.handleEngagementFromMention)
 
 				r.Get("/engagement/tasks", s.handleListEngagement)

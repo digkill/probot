@@ -20,7 +20,7 @@ type Mention = {
 
 type Brand = { id: string; name: string; slug: string; canonical_url: string }
 type CrawlSource = { id: string; kind: string; query: string; purpose: string; url: string; enabled: boolean; last_run_at?: string }
-type Inbox = { total: number; negative: number; open_negative: number; escalated: number; high: number }
+type Inbox = { total: number; negative: number; open_negative: number; escalated: number; high: number; false_positive: number }
 
 export default function MentionsPage() {
   const { t, locale } = useI18n()
@@ -31,11 +31,12 @@ export default function MentionsPage() {
   const [inbox, setInbox] = useState<Inbox | null>(null)
   const [providers, setProviders] = useState<{ id: string; name: string; configured: boolean }[]>([])
   const [brandId, setBrandId] = useState('')
-  const [filter, setFilter] = useState<'open' | 'negative' | 'high' | 'escalated' | 'all'>('open')
+  const [filter, setFilter] = useState<'open' | 'negative' | 'high' | 'escalated' | 'all' | 'false_positive'>('open')
   const [url, setUrl] = useState('https://hnrss.org/frontpage')
   const [query, setQuery] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState('')
   const autoPicked = useRef(false)
 
   function queryString() {
@@ -50,6 +51,8 @@ export default function MentionsPage() {
       p.set('severity', 'high')
     } else if (filter === 'escalated') {
       p.set('status', 'escalated')
+    } else if (filter === 'false_positive') {
+      p.set('status', 'false_positive')
     }
     const s = p.toString()
     return s ? `?${s}` : ''
@@ -92,17 +95,21 @@ export default function MentionsPage() {
 
   async function addManual(e: FormEvent) {
     e.preventDefault()
-    await api(wsPath('/mentions'), {
-      method: 'POST',
-      body: JSON.stringify({
-        source: 'manual',
-        url: url || 'https://example.com',
-        title: query ? query.slice(0, 80) : t('mentions.manualTitle'),
-        snippet: query || t('mentions.manualSnippet'),
-        brand_id: brandId || undefined,
-      }),
-    })
-    await load()
+    try {
+      await api(wsPath('/mentions'), {
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'manual',
+          url: url || 'https://example.com',
+          title: query ? query.slice(0, 80) : t('mentions.manualTitle'),
+          snippet: query || t('mentions.manualSnippet'),
+          brand_id: brandId || undefined,
+        }),
+      })
+      await load()
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : t('err.failed'))
+    }
   }
 
   async function watchBrand() {
@@ -165,6 +172,35 @@ export default function MentionsPage() {
     await load()
   }
 
+  async function deleteMention(id: string) {
+    setConfirmDelete('')
+    setBusy(id)
+    try {
+      await api(wsPath(`/mentions/${id}`), { method: 'DELETE' })
+      setMsg(t('mentions.deleted'))
+      await load()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : t('err.failed'))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function deleteAllFalse() {
+    setConfirmDelete('')
+    setBusy('purge')
+    try {
+      const qs = brandId ? `?brand_id=${brandId}` : ''
+      const res = await api<{ deleted: number }>(wsPath(`/mentions/delete-false-positives${qs}`), { method: 'POST' })
+      setMsg(t('mentions.deletedMany', { n: res.deleted }))
+      await load()
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : t('err.failed'))
+    } finally {
+      setBusy('')
+    }
+  }
+
   const brandName = (id?: string) => brands.find((b) => b.id === id)?.name
   const watchSources = sources.filter((s) => s.purpose === 'reviews' && s.enabled !== false)
   const filters = [
@@ -173,6 +209,7 @@ export default function MentionsPage() {
     { id: 'high' as const, label: t('mentions.filterHigh', { n: inbox?.high ?? 0 }) },
     { id: 'escalated' as const, label: t('mentions.filterEsc', { n: inbox?.escalated ?? 0 }) },
     { id: 'all' as const, label: t('mentions.filterAll', { n: inbox?.total ?? 0 }) },
+    { id: 'false_positive' as const, label: t('mentions.filterFalse', { n: inbox?.false_positive ?? 0 }) },
   ]
 
   return (
@@ -271,6 +308,23 @@ export default function MentionsPage() {
         ))}
       </div>
 
+      {filter === 'false_positive' && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-[var(--muted)]">{t('mentions.falseHint')}</span>
+          {mentions.length > 0 && (confirmDelete === 'all' ? (
+            <span className="flex items-center gap-2">
+              <span className="text-red-300">{t('mentions.confirmDelete')}</span>
+              <button disabled={busy === 'purge'} onClick={deleteAllFalse} className="text-red-400 font-medium">{t('mentions.yes')}</button>
+              <button onClick={() => setConfirmDelete('')} className="text-[var(--muted)]">{t('mentions.no')}</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmDelete('all')} className="rounded-lg border border-red-500/40 text-red-300 px-3 py-1.5">
+              {t('mentions.deleteAllFalse', { n: mentions.length })}
+            </button>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={addSource} className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-5 grid md:grid-cols-3 gap-3">
         <input className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2 md:col-span-2" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('mentions.rssUrl')} />
         <input className="rounded-lg bg-black/30 border border-[var(--line)] px-3 py-2" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('mentions.filterText')} />
@@ -296,7 +350,19 @@ export default function MentionsPage() {
                 <button disabled={busy === m.id} onClick={() => objection(m.id)} className="text-sm text-red-300">{t('mentions.objection')}</button>
                 <button disabled={busy === m.id} onClick={() => draftReply(m.id)} className="text-sm text-[var(--accent)]">{t('mentions.reply')}</button>
                 {m.status !== 'escalated' && <button onClick={() => setStatus(m.id, 'escalated')} className="text-sm text-[var(--accent2)]">{t('mentions.escalate')}</button>}
-                {m.status !== 'ignored' && <button onClick={() => setStatus(m.id, 'ignored')} className="text-sm text-[var(--muted)]">{t('mentions.ignore')}</button>}
+                {m.status !== 'ignored' && m.status !== 'false_positive' && <button onClick={() => setStatus(m.id, 'ignored')} className="text-sm text-[var(--muted)]">{t('mentions.ignore')}</button>}
+                {m.status === 'false_positive'
+                  ? <button onClick={() => setStatus(m.id, 'new')} className="text-sm text-[var(--accent)]">{t('mentions.unmarkFalse')}</button>
+                  : <button onClick={() => setStatus(m.id, 'false_positive')} className="text-sm text-amber-300">{t('mentions.markFalse')}</button>}
+                {confirmDelete === m.id ? (
+                  <span className="flex items-center gap-2 text-sm">
+                    <span className="text-red-300">{t('mentions.confirmDelete')}</span>
+                    <button disabled={busy === m.id} onClick={() => deleteMention(m.id)} className="text-red-400 font-medium">{t('mentions.yes')}</button>
+                    <button onClick={() => setConfirmDelete('')} className="text-[var(--muted)]">{t('mentions.no')}</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setConfirmDelete(m.id)} className="text-sm text-red-400">{t('mentions.delete')}</button>
+                )}
                 {m.status !== 'replied' && m.draft_reply && <button onClick={() => setStatus(m.id, 'replied')} className="text-sm text-[var(--muted)]">{t('mentions.markReplied')}</button>}
                 {m.draft_reply && (
                   <button
