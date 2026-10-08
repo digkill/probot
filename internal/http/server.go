@@ -90,6 +90,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/password/forgot", s.handleForgotPassword)
 		r.Post("/auth/password/reset", s.handleResetPassword)
 		r.Get("/playbooks", s.handleListPlaybooks)
+		r.Get("/contacts-export/{token}", s.handleContactExport)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware)
@@ -98,6 +99,7 @@ func (s *Server) Router() http.Handler {
 			r.Route("/workspaces/{workspaceID}", func(r chi.Router) {
 				r.Use(s.workspaceMiddleware)
 				r.Route("/telegram", s.telegramRoutes)
+				r.Route("/contacts", s.contactRoutes)
 				r.Get("/brands", s.handleListBrands)
 				r.Post("/brands", s.handleCreateBrand)
 				r.Patch("/brands/{brandID}", s.handleUpdateBrand)

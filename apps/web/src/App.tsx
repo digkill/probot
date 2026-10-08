@@ -13,6 +13,8 @@ import PlaybooksPage from './pages/PlaybooksPage'
 import LinksPage from './pages/LinksPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import KarmaPage from './pages/KarmaPage'
+import MailingLayout from './pages/mailing/MailingLayout'
+import ContactsPage from './pages/mailing/ContactsPage'
 
 function Shell({ children }: { children: React.ReactNode }) {
   const nav = useNavigate()
@@ -40,6 +42,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <Link to="/karma">{t('nav.karma')}</Link>
             <Link to="/mentions">{t('nav.mentions')}</Link>
             <Link to="/graph">{t('nav.graph')}</Link>
+            <Link to="/mailing/contacts">{t('nav.mailing')}</Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">
@@ -74,6 +77,10 @@ export default function App() {
       <Route path="/karma" element={<Private><KarmaPage /></Private>} />
       <Route path="/mentions" element={<Private><MentionsPage /></Private>} />
       <Route path="/graph" element={<Private><GraphPage /></Private>} />
+      <Route path="/mailing" element={<Private><MailingLayout /></Private>}>
+        <Route index element={<Navigate to="contacts" replace />} />
+        <Route path="contacts" element={<ContactsPage />} />
+      </Route>
     </Routes>
   )
 }

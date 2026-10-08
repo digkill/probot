@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@babylonjs/core": "^9.20.0",
+    "@types/papaparse": "^5.5.2",
+    "papaparse": "^5.7.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2"

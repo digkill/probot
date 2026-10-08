@@ -297,3 +297,16 @@ type KarmaSummary struct {
 	TodayByKind     map[string]int `json:"today_by_kind"`
 	TodayTaskCounts map[string]int `json:"today_task_counts"`
 }
+
+type Contact struct {
+	ID          uuid.UUID         `json:"id"`
+	WorkspaceID uuid.UUID         `json:"workspace_id"`
+	Email       string            `json:"email"`
+	Phone       string            `json:"phone"`
+	Name        string            `json:"name"`
+	Tags        []string          `json:"tags"`
+	Status      string            `json:"status"`
+	Attributes  map[string]string `json:"attributes"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+}
